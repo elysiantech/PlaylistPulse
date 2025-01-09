@@ -1,0 +1,18 @@
+appId: com.elysiantech.PlaylistPulse
+productName: PlaylistPulse
+copyright: Copyright © 2025 elysiantech
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+publish: null
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+

@@ -1,0 +1,14 @@
+node_modules
+*.log
+.next
+/app/ 
+!/renderer/app/ 
+data
+# Private env vars
+.env
+# local env files
+.env*.local
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
