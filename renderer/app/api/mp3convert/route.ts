@@ -10,11 +10,13 @@ import { PassThrough } from 'stream';
 async function extractAudioWithMetadata(
   url: string,
   song: { title: string; artist: string; album: string; releaseYear: string },
+  downloadDir?: string,
 ): Promise<string> {
-  // Create temporary directory
-  const tempDir = path.join(os.tmpdir(), 'youtube-audio');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
+  // Use specified download directory or default to user's Downloads/PlaylistPulse folder
+  const targetDir = downloadDir || path.join(os.homedir(), 'Downloads', 'PlaylistPulse');
+  
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
   }
 
   // Generate sanitized filenames
@@ -26,25 +28,81 @@ async function extractAudioWithMetadata(
   const sanitizedAlbum = sanitize(song.album);
 
   const audioFileName = `${sanitizedArtist}-${sanitizedAlbum}-${sanitizedTitle}.mp3`;
-  const audioPath = path.join(tempDir, audioFileName);
-  const tempAudioPath = path.join(tempDir, `${sanitizedTitle}-temp.mp3`);
+  const audioPath = path.join(targetDir, audioFileName);
+  const tempAudioPath = path.join(targetDir, `${sanitizedTitle}-temp.mp3`);
 
   return new Promise((resolve, reject) => {
-    // Spawn the yt-dlp process
-    const ytDlp = spawn('/opt/homebrew/bin/yt-dlp', [
+    // Set timeout for the entire process
+    const timeout = setTimeout(() => {
+      ytDlp.kill('SIGTERM');
+      reject(new Error('Download timeout after 2 minutes'));
+    }, 120000); // 2 minutes timeout
+
+    // Determine yt-dlp path - try multiple locations
+    const ytDlpPaths = [
+      '/opt/homebrew/bin/yt-dlp',
+      '/usr/local/bin/yt-dlp', 
+      '/usr/bin/yt-dlp',
+      'yt-dlp'
+    ];
+    
+    let ytDlpPath = ytDlpPaths[0]; // Default to homebrew path
+    
+    // Try to find working yt-dlp path
+    for (const testPath of ytDlpPaths) {
+      try {
+        if (fs.existsSync(testPath) || testPath === 'yt-dlp') {
+          ytDlpPath = testPath;
+          break;
+        }
+      } catch (err) {
+        continue;
+      }
+    }
+
+    console.log(`Using yt-dlp path: ${ytDlpPath}`);
+
+    // Spawn the yt-dlp process with additional options to handle signature issues
+    const ytDlp = spawn(ytDlpPath, [
       url,
       '--output', tempAudioPath,
       '--extract-audio',
       '--audio-format', 'mp3',
       '--format', 'bestaudio/best',
+      '--no-warnings',
+      '--ignore-errors',
+      '--retry-sleep', '5',
+      '--retries', '3'
     ]);
 
+    let stderrOutput = '';
+
     // Handle output and errors
-    // ytDlp.stdout.on('data', (data) => console.log(`yt-dlp: ${data}`));
-    ytDlp.stderr.on('data', (data) => console.error(`yt-dlp error: ${data}`));
+    ytDlp.stdout.on('data', (data) => {
+      console.log(`yt-dlp: ${data}`);
+    });
+    
+    ytDlp.stderr.on('data', (data) => {
+      const message = data.toString();
+      stderrOutput += message;
+      console.error(`yt-dlp error: ${message}`);
+    });
+
+    ytDlp.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`Failed to start yt-dlp: ${error.message}`));
+    });
 
     ytDlp.on('close', (code) => {
+      clearTimeout(timeout);
+      
       if (code === 0) {
+        // Check if file was actually created
+        if (!fs.existsSync(tempAudioPath)) {
+          reject(new Error('Download failed: Audio file was not created'));
+          return;
+        }
+
         // Add ID3 metadata
         const tags = {
           title: song.title,
@@ -59,12 +117,16 @@ async function extractAudioWithMetadata(
             reject(err);
           } else {
             // Rename the file to the final name
-            fs.renameSync(tempAudioPath, audioPath);
-            resolve(audioPath);
+            try {
+              fs.renameSync(tempAudioPath, audioPath);
+              resolve(audioPath);
+            } catch (renameError) {
+              reject(new Error(`Failed to rename file: ${renameError}`));
+            }
           }
         });
       } else {
-        reject(new Error(`yt-dlp process exited with code ${code}`));
+        reject(new Error(`yt-dlp process exited with code ${code}. Error: ${stderrOutput}`));
       }
     });
   });
@@ -73,82 +135,55 @@ async function extractAudioWithMetadata(
 
 export async function POST(request: Request) {
   try {
-    const song: { title: string; artist: string; album: string; releaseYear: string; youtubeUrl: string } =
-      await request.json();
+    console.log('=== STARTING DOWNLOAD REQUEST ===');
+    const data: { 
+      title: string; 
+      artist: string; 
+      album: string; 
+      releaseYear: string; 
+      youtubeUrl: string;
+      downloadDir?: string;
+    } = await request.json();
 
-    if (!song || !song.youtubeUrl) {
+    console.log('Request data:', {
+      title: data.title,
+      artist: data.artist,
+      youtubeUrl: data.youtubeUrl,
+      downloadDir: data.downloadDir
+    });
+
+    if (!data || !data.youtubeUrl) {
+      console.log('ERROR: Invalid input data');
       return NextResponse.json({ error: 'Invalid input, expected a song object with a YouTube URL' }, { status: 400 });
     }
 
-    // Call the extractAudioWithMetadata function to generate the MP3 file
-    const audioPath = await extractAudioWithMetadata(song.youtubeUrl, {
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      releaseYear: song.releaseYear,
-    });
+    console.log('Calling extractAudioWithMetadata...');
+    // Call the extractAudioWithMetadata function to download directly to final location
+    const audioPath = await extractAudioWithMetadata(data.youtubeUrl, {
+      title: data.title,
+      artist: data.artist,
+      album: data.album,
+      releaseYear: data.releaseYear,
+    }, data.downloadDir);
 
-    // Extract the filename from the audioPath
+    console.log('Download completed successfully:', audioPath);
+    
+    // Return success response with file path instead of streaming
     const filename = path.basename(audioPath);
-
-    // Read the file as a buffer
-    // Read the file as a buffer
-    const encodedFilename = encodeURIComponent(filename);
-    const stream = fs.createReadStream(audioPath);
-
-    return new Response(stream as any, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
-      },
+    
+    return NextResponse.json({ 
+      success: true, 
+      filename,
+      filePath: audioPath,
+      message: `Downloaded successfully to ${audioPath}`
     });
   } catch (error) {
+    console.error('=== DOWNLOAD ERROR ===');
     console.error('Error processing request:', error);
+    console.error('Error stack:', (error as Error).stack);
     return NextResponse.json(
       { error: (error as Error).message || 'An error occurred while processing the request' },
       { status: 500 },
     );
   }
 }
-
-/*export async function POST(request: Request) {
-  try {
-    // Parse the incoming song data
-    const song = await request.json();
-    if (!song || !song.youtubeUrl) {
-      return NextResponse.json({ error: 'Invalid input, expected a song object with a YouTube URL' }, { status: 400 });
-    }
-
-    // Forward the request to the external web_convert endpoint
-    const response = await fetch(`${process.env.MODAL_CONVERT_URL}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(song),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to convert audio: ${errorText}`);
-    }
-
-    // Convert ReadableStream to a Blob
-    const contentDisposition = response.headers.get('content-disposition');
-    const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || 'download.mp3';
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    return new Response(buffer, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
-  } catch (error) {
-    console.error('Error processing request:', error);
-    return NextResponse.json(
-      { error: (error as Error).message || 'An error occurred while processing the request' },
-      { status: 500 },
-    );
-  }
-}
-  */
