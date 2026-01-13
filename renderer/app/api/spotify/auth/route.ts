@@ -5,7 +5,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
 
   if (!code) {
-    return NextResponse.redirect(`${request.nextUrl.origin}/`);
+    const noCodeRedirect = process.env.NODE_ENV === 'production'
+      ? `${request.nextUrl.origin}/`
+      : 'http://127.0.0.1:3000/';
+    return NextResponse.redirect(noCodeRedirect);
   }
 
   try {
@@ -32,20 +35,27 @@ export async function GET(request: NextRequest) {
     }
 
     const tokenData = await response.json();
-    console.log(`${JSON.stringify(tokenData)}`)
-    
+
     // Set the access token as an HTTP-only cookie
-    const res =  NextResponse.redirect(`${request.nextUrl.origin}/`);
+    // Always redirect to 127.0.0.1 to match Spotify's redirect URI
+    const redirectUrl = process.env.NODE_ENV === 'production'
+      ? `${request.nextUrl.origin}/`
+      : 'http://127.0.0.1:3000/';
+    const res = NextResponse.redirect(redirectUrl);
     res.cookies.set('spotify_access_token', tokenData.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
-      maxAge: tokenData.expires_in, // Expiry in seconds
+      maxAge: tokenData.expires_in,
     });
 
     return res;
   } catch (error) {
     console.error('Error exchanging token:', error);
-    return NextResponse.redirect(`${request.nextUrl.origin}/`);
+    const errorRedirectUrl = process.env.NODE_ENV === 'production'
+      ? `${request.nextUrl.origin}/`
+      : 'http://127.0.0.1:3000/';
+    return NextResponse.redirect(errorRedirectUrl);
   }
 }

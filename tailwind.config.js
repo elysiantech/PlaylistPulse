@@ -50,6 +50,9 @@ module.exports = {
                   DEFAULT: "hsl(var(--card))",
                   foreground: "hsl(var(--card-foreground))",
               },
+              // VibeSync colors
+              "vibe-cyan": "#00f2ff",
+              "spotify-green": "#1DB954",
           },
           borderRadius: {
               lg: "var(--radius)",

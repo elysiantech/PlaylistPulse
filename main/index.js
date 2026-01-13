@@ -82,7 +82,7 @@ electron_1.app.on('ready', async () => {
             const parsedUrl = (0, url_1.parse)(req.url, true);
             handle(req, res, parsedUrl);
         }).listen(port, () => {
-            console.log(`> Ready on http://localhost:${port}`);
+            console.log(`> Ready on http://127.0.0.1:${port}`);
         });
         const mainWindow = new electron_1.BrowserWindow({
             width: 1200,
@@ -104,7 +104,7 @@ electron_1.app.on('ready', async () => {
             }
             mainWindow.show();
         });
-        mainWindow.loadURL(`http://localhost:${port}/`);
+        mainWindow.loadURL(`http://127.0.0.1:${port}/`);
     }
     catch (error) {
         console.error('Failed to start app:', error);

@@ -12,26 +12,38 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 
   try {
-    const response = await fetch(`${SPOTIFY_API}/playlists/${id}/tracks`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const allTracks: any[] = [];
+    let url: string | null = `${SPOTIFY_API}/playlists/${id}/tracks?limit=100`;
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch playlist tracks');
+    // Paginate through all tracks
+    while (url) {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch playlist tracks');
+      }
+
+      const data = await response.json();
+      allTracks.push(...data.items);
+      url = data.next; // Next page URL or null if no more pages
     }
 
-    const data = await response.json();
-    const tracks = data.items.map((item: any) => ({
-      id: item.track.id,
-      title: item.track.name,
-      artist: item.track.artists.map((artist: any) => artist.name).join(', '),
-      album: item.track.album.name,
-      releaseDate: item.track.album.release_date,
-      duration: item.track.duration_ms,
-      spotifyUrl: item.track.external_urls.spotify,
-    }));
+    const tracks = allTracks
+      .filter((item: any) => item.track) // Filter out null tracks
+      .map((item: any) => ({
+        id: item.track.id,
+        title: item.track.name,
+        artist: item.track.artists.map((artist: any) => artist.name).join(', '),
+        album: item.track.album.name,
+        releaseDate: item.track.album.release_date,
+        duration: item.track.duration_ms,
+        spotifyUrl: item.track.external_urls.spotify,
+        albumArt: item.track.album.images?.[0]?.url || null,
+      }));
 
     return NextResponse.json(tracks);
   } catch (error) {

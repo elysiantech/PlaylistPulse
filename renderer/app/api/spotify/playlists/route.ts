@@ -11,18 +11,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${SPOTIFY_API}/me/playlists`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const allPlaylists: any[] = [];
+    let url: string | null = `${SPOTIFY_API}/me/playlists?limit=50`;
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch playlists');
+    // Paginate through all playlists
+    while (url) {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch playlists');
+      }
+
+      const data = await response.json();
+      allPlaylists.push(...data.items);
+      url = data.next; // Next page URL or null if no more pages
     }
 
-    const playlists = await response.json();
-    return NextResponse.json(playlists);
+    return NextResponse.json({ items: allPlaylists });
   } catch (error) {
     console.error('Error fetching playlists:', error);
     return NextResponse.json({ error: 'Failed to fetch playlists' }, { status: 500 });
