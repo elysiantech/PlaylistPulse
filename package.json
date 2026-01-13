@@ -1,8 +1,8 @@
 {
   "private": true,
-  "name": "playlistpulse",
+  "name": "vibesync",
   "author": "elysiantech",
-  "description": "Playlist DJ for Spotify",
+  "description": "VibeSync - DJ Music Manager for Spotify",
   "version": "0.0.1",
   "main": "main/index.js",
   "scripts": {
@@ -71,8 +71,8 @@
     "typescript": "^5.4.5"
   },
   "build": {
-    "appId": "com.elysiantech.playlistpulse",
-    "productName": "PlaylistPulse",
+    "appId": "com.elysiantech.vibesync",
+    "productName": "VibeSync",
     "directories": {
       "output": "dist",
       "buildResources": "resources"

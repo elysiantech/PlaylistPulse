@@ -1,4 +1,4 @@
-# PlaylistPulse - Project Instructions
+# VibeSync - Project Instructions
 
 ## Important: Spotify API Change (April 2025)
 

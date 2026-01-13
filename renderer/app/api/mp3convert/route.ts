@@ -12,8 +12,8 @@ async function extractAudioWithMetadata(
   song: { title: string; artist: string; album: string; releaseYear: string },
   downloadDir?: string,
 ): Promise<string> {
-  // Use specified download directory or default to user's Downloads/PlaylistPulse folder
-  const targetDir = downloadDir || path.join(os.homedir(), 'Downloads', 'PlaylistPulse');
+  // Use specified download directory or default to user's Downloads/VibeSync folder
+  const targetDir = downloadDir || path.join(os.homedir(), 'Downloads', 'VibeSync');
   
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });

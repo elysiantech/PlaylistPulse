@@ -9,7 +9,7 @@ import * as path from 'path';
 // By default, electron-log logs only to file starting from level 'warn'. We also want 'info'.
 if (app.isPackaged){
   log.transports.file.level = 'warn';
-  log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'logs', 'playlistpulse.log')
+  log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'logs', 'vibesync.log')
   log.initialize()
   Object.assign(console, log.functions)
   process.on('uncaughtException', (error) => { log.error(error)})
